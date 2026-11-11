@@ -1,12 +1,12 @@
 // POST /api/scan  — recibe la foto del ticket (base64) y devuelve los ítems en JSON.
 // Requiere: usuario autenticado en tu Firebase (anónimo alcanza).
-// Variables de entorno: ANTHROPIC_API_KEY y FIREBASE_PROJECT_ID.
+// Variables de entorno: GEMINI_API_KEY (gratis en aistudio.google.com) y FIREBASE_PROJECT_ID.
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
 const JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const MAX_B64 = 4_000_000; // ~3 MB de imagen (Vercel corta el body en 4,5 MB)
 
 const PROMPT = `Sos un lector de tickets y facturas de restaurantes y bares de Argentina. Mirá la imagen y extraé los ítems consumidos.
@@ -43,27 +43,23 @@ export default async function handler(req, res) {
   if (typeof image !== 'string' || !image.length || image.length > MAX_B64) return res.status(400).json({ error: 'bad_image' });
   const type = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType) ? mediaType : 'image/jpeg';
 
-  // 3) Claude lee el ticket
+  // 3) Gemini lee el ticket
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST',
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
+      headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: type, data: image } },
-          { type: 'text', text: PROMPT },
+        contents: [{ role: 'user', parts: [
+          { inline_data: { mime_type: type, data: image } },
+          { text: PROMPT },
         ] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
       }),
     });
-    if (!r.ok) { console.error('anthropic', r.status, await r.text()); return res.status(502).json({ error: 'ai_error' }); }
+    if (r.status === 429) return res.status(429).json({ error: 'rate_limited' });
+    if (!r.ok) { console.error('gemini', r.status, await r.text()); return res.status(502).json({ error: 'ai_error' }); }
     const j = await r.json();
-    const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+    const txt = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     const mm = txt.match(/\{[\s\S]*\}/);
     const data = JSON.parse(mm ? mm[0] : txt);
     return res.status(200).json({ items: Array.isArray(data.items) ? data.items : [], ticket_total: data.ticket_total ?? null });
