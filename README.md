@@ -8,7 +8,7 @@ Dividí la cuenta con tus amigos: sacás foto del ticket, se separan los ítems,
 |---|---|
 | `index.html` | La app completa (pantallas, cálculo, compartir, vista de amigos). |
 | `firebase-config.js` | **Lo completás vos** con la config web de tu Firebase. |
-| `api/scan.js` | Función de Vercel que lee el ticket con Gemini. La key nunca llega al celular. |
+| `api/scan.js` | (Opcional, sin uso) función para leer el ticket con una IA paga si algún día querés más precisión. |
 | `manifest.webmanifest`, `sw.js`, `icons/` | La hacen instalable y que abra sin señal. |
 | `firestore.rules` | Reglas de seguridad de Firestore. |
 | `vercel.json`, `package.json` | Configuración del deploy. |
@@ -20,9 +20,9 @@ Dividí la cuenta con tus amigos: sacás foto del ticket, se separan los ítems,
 3. **Firestore Database → Crear base de datos** (modo producción). Después, en **Reglas**, pegá el contenido de `firestore.rules` y publicá.
 4. **Configuración del proyecto → General → Tus apps → Agregar app web.** Copiá el objeto `firebaseConfig` y pegalo en `firebase-config.js`.
 
-## 2. Key de Gemini (gratis)
+## 2. Lectura del ticket
 
-En aistudio.google.com → Get API key → Create API key. El plan gratuito tiene límites por minuto y por día, suficientes para uso entre amigos.
+Es gratis y corre en el propio celular (Tesseract.js): no hace falta ninguna key. La primera lectura descarga el lector (~10 MB) y después queda guardado.
 
 ## 3. Vercel
 
@@ -31,9 +31,7 @@ En aistudio.google.com → Get API key → Create API key. El plan gratuito tien
 
 | Variable | Valor |
 |---|---|
-| `GEMINI_API_KEY` | tu key de Google AI Studio |
 | `FIREBASE_PROJECT_ID` | el ID de tu proyecto de Firebase (ej. `btc-tracker-ce874`) |
-| `GEMINI_MODEL` | opcional, por defecto `gemini-flash-latest` |
 
 3. Deploy.
 4. De vuelta en Firebase: **Authentication → Settings → Dominios autorizados → Agregar dominio** → tu dominio de Vercel (ej. `ratapp.vercel.app`).
@@ -49,6 +47,5 @@ En aistudio.google.com → Get API key → Create API key. El plan gratuito tien
 
 ## Seguridad
 
-- La key de Gemini vive solo en Vercel.
 - `/api/scan` solo responde a usuarios autenticados en *tu* Firebase (verifica el token con las claves públicas de Google, sin clave secreta).
 - Las cuentas compartidas se pueden leer conociendo el ID (12 caracteres al azar), pero nadie puede listarlas ni editarlas salvo quien las creó.

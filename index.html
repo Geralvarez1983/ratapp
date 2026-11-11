@@ -427,31 +427,73 @@ import { firebaseConfig } from "./firebase-config.js";
     }catch(e){ return blob; }
   }
 
+  // Lectura gratis en el celular: Tesseract.js (OCR) + reglas para tickets argentinos
+  let tessLoading = null;
+  function loadTesseract(){
+    if (window.Tesseract) return Promise.resolve();
+    if (!tessLoading) tessLoading = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      sc.onload = res; sc.onerror = rej; document.head.appendChild(sc);
+    });
+    return tessLoading;
+  }
+  async function prepCanvas(blob){
+    const url = URL.createObjectURL(blob);
+    const img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+    const target = 1700, k = Math.min(2.5, target / img.naturalWidth);
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth*k); c.height = Math.round(img.naturalHeight*k);
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+    const d = g.getImageData(0,0,c.width,c.height), px = d.data;
+    let sum = 0; for (let i=0;i<px.length;i+=4){ const y = .299*px[i]+.587*px[i+1]+.114*px[i+2]; px[i]=px[i+1]=px[i+2]=y; sum+=y; }
+    const mean = sum/(px.length/4);
+    for (let i=0;i<px.length;i+=4){ const v = Math.max(0, Math.min(255, (px[i]-mean)*1.6 + 150)); px[i]=px[i+1]=px[i+2]=v; }
+    g.putImageData(d,0,0);
+    return c;
+  }
+  const MONEY = /(?:\$\s*)?(-?\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|-?\d+,\d{1,2}|-?\d{2,7})\s*$/;
+  const SKIP = /(sub\s*-?total|i\.?v\.?a|efectivo|tarjeta|d[eé]bito|cr[eé]dito|cambio|vuelto|propina|cuit|c\.?u\.?i\.?t|fecha|hora|mesa|mozo|cubiertos?:|factura|ticket|t[ií]que|cae|ingresos|brutos|resp\.?|consumidor|saldo|pago|nro|n[°º]|tel[eé]?f?|direcc|domicilio|inicio|actividad|caja|cajero|comprobante|percep|neto|gravado|exento|mercado\s*pago|qr|transfer)/i;
+  function parseReceipt(text){
+    const items = []; let total = null;
+    text.split(/\n+/).map(l => l.replace(/[|_~*]+/g,' ').replace(/\s{2,}/g,' ').trim()).filter(Boolean).forEach(line => {
+      const m = line.match(MONEY); if (!m) return;
+      const amount = parseNum(m[1]);
+      if (/\btotal\b/i.test(line) && !/sub/i.test(line)) { total = amount; return; }
+      if (SKIP.test(line) || amount <= 0) return;
+      let rest = line.slice(0, m.index).trim();
+      rest = rest.replace(/(?:\$\s*)?\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})?\s*$/, '').trim(); // precio unitario, si hay
+      let qty = 1;
+      const q = rest.match(/^(\d{1,2})\s*(?:x|u\.?|un\.?|\*)?\s+(?=\D)/i) || rest.match(/^(\d{1,2})\s*x\s*/i);
+      if (q) { qty = Math.max(1, parseInt(q[1],10)); rest = rest.slice(q[0].length); }
+      rest = rest.replace(/\s+x\s*$/i,'').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/, '').trim();
+      if ((rest.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g) || []).length < 3) return;
+      const name = rest.toLowerCase().replace(/(^|\s)\S/g, t => t.toUpperCase());
+      items.push({ id:uid(), name, qty: qty > 20 ? 1 : qty, price: amount });
+    });
+    return { items, total };
+  }
+
   $('readBtn').onclick = async () => {
     if (!imgBlob) return;
-    if (!fbUser){ setStatus('err','Todavía no se conectó con el servidor. Esperá unos segundos o cargá los ítems a mano.'); return; }
     const btn=$('readBtn'); btn.disabled=true;
-    setStatus('info','<span class="spin"></span>Leyendo el ticket…');
+    setStatus('info','<span class="spin"></span>Preparando el lector… (la primera vez tarda un poco más)');
     try{
-      const small = await downscale(imgBlob);
-      const b64 = await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.onerror=rej; fr.readAsDataURL(small); });
-      const token = await fbUser.getIdToken();
-      const resp = await fetch('/api/scan', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({ image:b64, mediaType: small.type || 'image/jpeg' }) });
-      if (!resp.ok){ const e = new Error('http'); e.code = resp.status===429 ? 'rate_limited' : resp.status===401 ? 'not_granted' : 'error'; throw e; }
-      const data = await resp.json();
-      const items = (data.items||[]).filter(x => x && (x.name||x.total)).map(x => ({ id:uid(), name:String(x.name||'Ítem'), qty:Math.max(1, Math.round(+x.qty||1)), price: parseNum(x.total) }));
-      if (!items.length){ setStatus('err','No encontré ítems en la foto. Probá con otra más nítida o cargalos a mano.'); }
+      await loadTesseract();
+      const canvas = await prepCanvas(imgBlob);
+      const { data } = await Tesseract.recognize(canvas, 'spa', {
+        logger: m => { if (m.status === 'recognizing text') setStatus('info','<span class="spin"></span>Leyendo el ticket… '+Math.round((m.progress||0)*100)+'%'); }
+      });
+      const r = parseReceipt(data.text || '');
+      if (!r.items.length){ setStatus('err','No pude reconocer ítems en la foto. Probá con una más derecha, cerca y con buena luz, o cargalos a mano.'); }
       else {
-        S.items = items; S.assign = {};
-        S.ticketTotal = data.ticket_total ? fmtIn(+data.ticket_total) : '';
+        S.items = r.items; S.assign = {};
+        S.ticketTotal = r.total ? fmtIn(r.total) : '';
         save(); renderItems();
-        setStatus('ok','Leí '+items.length+' ítems. Revisalos y corregí lo que haga falta.');
+        setStatus('ok','Leí '+r.items.length+' ítems. Revisalos: la lectura en el celular puede confundir letras o números.');
       }
     }catch(err){
-      const code = err && err.code;
-      if (code==='not_granted') setStatus('err','La sesión venció. Recargá la página y probá de nuevo.');
-      else if (code==='rate_limited') setStatus('err','Hay muchas lecturas seguidas. Esperá un minuto y probá de nuevo, o cargá los ítems a mano.');
-      else setStatus('err','No pude leer el ticket. Probá con otra foto o cargalo a mano.');
+      console.error(err);
+      setStatus('err','No pude leer el ticket (¿sin conexión?). Podés cargar los ítems a mano.');
     }finally{ btn.disabled=false; }
   };
 
