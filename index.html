@@ -450,7 +450,7 @@ import { firebaseConfig } from "./firebase-config.js";
     }catch(err){
       const code = err && err.code;
       if (code==='not_granted') setStatus('err','La sesión venció. Recargá la página y probá de nuevo.');
-      else if (code==='rate_limited') setStatus('err','Llegaste al límite de lecturas de hoy. Podés cargar los ítems a mano.');
+      else if (code==='rate_limited') setStatus('err','Hay muchas lecturas seguidas. Esperá un minuto y probá de nuevo, o cargá los ítems a mano.');
       else setStatus('err','No pude leer el ticket. Probá con otra foto o cargalo a mano.');
     }finally{ btn.disabled=false; }
   };

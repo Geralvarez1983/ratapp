@@ -8,7 +8,7 @@ Dividí la cuenta con tus amigos: sacás foto del ticket, se separan los ítems,
 |---|---|
 | `index.html` | La app completa (pantallas, cálculo, compartir, vista de amigos). |
 | `firebase-config.js` | **Lo completás vos** con la config web de tu Firebase. |
-| `api/scan.js` | Función de Vercel que lee el ticket con la API de Claude. La key nunca llega al celular. |
+| `api/scan.js` | Función de Vercel que lee el ticket con Gemini. La key nunca llega al celular. |
 | `manifest.webmanifest`, `sw.js`, `icons/` | La hacen instalable y que abra sin señal. |
 | `firestore.rules` | Reglas de seguridad de Firestore. |
 | `vercel.json`, `package.json` | Configuración del deploy. |
@@ -20,9 +20,9 @@ Dividí la cuenta con tus amigos: sacás foto del ticket, se separan los ítems,
 3. **Firestore Database → Crear base de datos** (modo producción). Después, en **Reglas**, pegá el contenido de `firestore.rules` y publicá.
 4. **Configuración del proyecto → General → Tus apps → Agregar app web.** Copiá el objeto `firebaseConfig` y pegalo en `firebase-config.js`.
 
-## 2. API de Claude
+## 2. Key de Gemini (gratis)
 
-En console.anthropic.com → API Keys → creá una key. Cargale algo de crédito: cada ticket cuesta centavos de dólar.
+En aistudio.google.com → Get API key → Create API key. El plan gratuito tiene límites por minuto y por día, suficientes para uso entre amigos.
 
 ## 3. Vercel
 
@@ -31,9 +31,9 @@ En console.anthropic.com → API Keys → creá una key. Cargale algo de crédit
 
 | Variable | Valor |
 |---|---|
-| `ANTHROPIC_API_KEY` | tu key de Claude |
+| `GEMINI_API_KEY` | tu key de Google AI Studio |
 | `FIREBASE_PROJECT_ID` | el ID de tu proyecto de Firebase (ej. `btc-tracker-ce874`) |
-| `ANTHROPIC_MODEL` | opcional, por defecto `claude-sonnet-5-5` (podés usar `claude-haiku-5-5` para que salga más barato) |
+| `GEMINI_MODEL` | opcional, por defecto `gemini-flash-latest` |
 
 3. Deploy.
 4. De vuelta en Firebase: **Authentication → Settings → Dominios autorizados → Agregar dominio** → tu dominio de Vercel (ej. `ratapp.vercel.app`).
@@ -49,7 +49,6 @@ En console.anthropic.com → API Keys → creá una key. Cargale algo de crédit
 
 ## Seguridad
 
-- La key de Claude vive solo en Vercel.
+- La key de Gemini vive solo en Vercel.
 - `/api/scan` solo responde a usuarios autenticados en *tu* Firebase (verifica el token con las claves públicas de Google, sin clave secreta).
-- Poné un **límite de gasto mensual** en console.anthropic.com → Billing: es el tope real de lo que puede costar.
 - Las cuentas compartidas se pueden leer conociendo el ID (12 caracteres al azar), pero nadie puede listarlas ni editarlas salvo quien las creó.
