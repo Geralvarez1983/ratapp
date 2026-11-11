@@ -19,7 +19,6 @@ Dividí la cuenta con tus amigos: sacás foto del ticket, se separan los ítems,
 2. **Authentication → Sign-in method → Anónimo → Habilitar.** Así tus amigos entran sin registrarse.
 3. **Firestore Database → Crear base de datos** (modo producción). Después, en **Reglas**, pegá el contenido de `firestore.rules` y publicá.
 4. **Configuración del proyecto → General → Tus apps → Agregar app web.** Copiá el objeto `firebaseConfig` y pegalo en `firebase-config.js`.
-5. **Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada.** Se descarga un JSON. **No lo subas a GitHub**: va como variable de entorno en Vercel (paso 3).
 
 ## 2. API de Claude
 
@@ -33,8 +32,7 @@ En console.anthropic.com → API Keys → creá una key. Cargale algo de crédit
 | Variable | Valor |
 |---|---|
 | `ANTHROPIC_API_KEY` | tu key de Claude |
-| `FIREBASE_SERVICE_ACCOUNT` | **el contenido completo** del JSON de la cuenta de servicio (pegalo tal cual) |
-| `DAILY_SCAN_LIMIT` | opcional, lecturas por usuario por día (por defecto 30) |
+| `FIREBASE_PROJECT_ID` | el ID de tu proyecto de Firebase (ej. `btc-tracker-ce874`) |
 | `ANTHROPIC_MODEL` | opcional, por defecto `claude-sonnet-5-5` (podés usar `claude-haiku-5-5` para que salga más barato) |
 
 3. Deploy.
@@ -52,5 +50,6 @@ En console.anthropic.com → API Keys → creá una key. Cargale algo de crédit
 ## Seguridad
 
 - La key de Claude vive solo en Vercel.
-- `/api/scan` solo responde a usuarios autenticados en *tu* Firebase y tiene un tope diario por usuario (colección `usage`, que solo toca el servidor).
+- `/api/scan` solo responde a usuarios autenticados en *tu* Firebase (verifica el token con las claves públicas de Google, sin clave secreta).
+- Poné un **límite de gasto mensual** en console.anthropic.com → Billing: es el tope real de lo que puede costar.
 - Las cuentas compartidas se pueden leer conociendo el ID (12 caracteres al azar), pero nadie puede listarlas ni editarlas salvo quien las creó.
