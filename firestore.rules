@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cuentas compartidas: cualquiera con el link las ve; solo quien la creó la modifica.
+    match /cuentas/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.owner == request.auth.uid
+                            && request.resource.data.owner == request.auth.uid;
+    }
+  }
+}
